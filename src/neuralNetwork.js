@@ -172,30 +172,6 @@ export function evaluateTestData(testData, biases, weights) {
     testMap,
     count
   }
-
-  // let count = 0;
-  // let testMap = {};
-  // for (let j = 0; j < results.length; j++) {
-  //   const expected = results[j].expected
-  //   const actualIndex = results[j].actualIndex
-  //   if (!testMap[expected]) {
-  //     testMap[expected] = {
-  //       correct: 0,
-  //       wrong: {}
-  //     }
-  //   }
-  //   if (expected === actual) {
-  //     count++;
-  //     testMap[expected].correct ++
-  //   } else {
-  //     if (!testMap[expected].wrong[actual]) {
-  //       testMap[expected].wrong[actual] = []
-  //     }
-  //     testMap[expected].wrong[actual].push(j)
-  //   }
-
-
-
   return results;
 }
 
@@ -239,8 +215,8 @@ export function printSnapshot(biases, weights, epoch, onStateUpdate, testData) {
 
 export function runEpochs(options, initialBiases, initialWeights) {
   const { trainingData, epochs, miniBatchSize, eta, testData, onStateUpdate } = options;
-  console.log(`Training data points: ${trainingData.length}`)
 
+  console.log(`Training data points: ${trainingData.length}`)
   printSnapshot(initialBiases, initialWeights, 0, onStateUpdate, testData)
 
   for (let i = 0; i < epochs; i++) {
@@ -255,45 +231,6 @@ export function runEpochs(options, initialBiases, initialWeights) {
     });
 
     printSnapshot(curBiases, curWeights, i + 1, onStateUpdate, testData)
-
-
-    // // if (testData) {
-    // //   const testResults = evaluateTestData(testData, curBiases, curWeights);
-    // //   let count = 0;
-    // //   let testMap = {};
-    // //   for (let j = 0; j < testResults.length; j++) {
-    // //     const expected = testResults[j].expected
-    // //     const actual = testResults[j].actual
-    // //     if (!testMap[expected]) {
-    // //       testMap[expected] = {
-    // //         correct: 0,
-    // //         wrong: {}
-    // //       }
-    // //     }
-    // //     if (expected === actual) {
-    // //       count++;
-    // //       testMap[expected].correct ++
-    // //     } else {
-    // //       if (!testMap[expected].wrong[actual]) {
-    // //         testMap[expected].wrong[actual] = []
-    // //       }
-    // //       testMap[expected].wrong[actual].push(j)
-    // //     }
-    // //   }
-    //   /* Expose data on each epic */
-    //   if (onStateUpdate) {
-    //     onStateUpdate({
-    //       biases: curBiases,
-    //       weights: curWeights,
-    //       testResults: testMap
-    //     }, i + 1)
-    //   }
-    //   console.log(`Epoch ${i + 1} complete: ${count} out of ${testResults.length}`);
-    // } else {
-    //   /* Expose data on each epic */
-    //
-    //   console.log(`Epoch ${i + 1} complete`);
-    // }
   }
 }
 
