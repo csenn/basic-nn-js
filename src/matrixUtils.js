@@ -18,7 +18,10 @@ function simpleMatrix(m, n, type) {
       } else if (type === 'multiply') {
         val = m[i][j] * n[i][j];
       }
+      // This is a bad idea, but need to do this for the crossEntropy function
       if (isNaN(val)) {
+        console.log(m[i][j], n[i][j]);
+        // val = 0;
         throw new Error('Val must me a number')
       }
       result[i][j] = val;

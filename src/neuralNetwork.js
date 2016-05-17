@@ -1,5 +1,5 @@
-// import math from 'mathjs'
 import _ from 'lodash';
+import { gaussian } from './statUtils';
 import {
   addMatrix,
   subtractMatrix,
@@ -10,52 +10,61 @@ import {
   zeroMatrix
 } from './matrixUtils';
 
-// http://stackoverflow.com/questions/25582882/javascript-math-random-normal-distribution-gaussian-bell-curve
-function gaussian(mean, stdev) {
-  let y2;
-  let useLast = false;
-  return function () {
-    let y1;
-    if (useLast) {
-      y1 = y2;
-      useLast = false;
+// Neuron Functions
+//https://theclevermachine.wordpress.com/2014/09/08/derivation-derivatives-for-common-neural-network-activation-functions/
+const ACTIVATION_TYPE = {
+  sigmoid: {
+    func: (num) => {
+      return 1 / (1 + Math.pow(Math.E, -num));
+    },
+    derivative: (num) => {
+      const output = ACTIVATION_TYPE.sigmoid.func(num);
+      return output * (1 - output);
     }
-    else {
-      let x1, x2, w;
-      do {
-        x1 = 2.0 * Math.random() - 1.0;
-        x2 = 2.0 * Math.random() - 1.0;
-        w = x1 * x1 + x2 * x2;
-      } while (w >= 1.0);
-      w = Math.sqrt((-2.0 * Math.log(w)) / w);
-      y1 = x1 * w;
-      y2 = x2 * w;
-      useLast = true;
+  },
+  tanh: {
+    func: (num) => {
+      return Math.tanh(num);
+    },
+    derivative: (num) => {
+     const tanh = ACTIVATION_TYPE.tanh.func(num);
+     return 1 - tanh * tanh;
     }
-
-    const retval = mean + stdev * y1;
-    return retval;
-    //    if(retval > 0)
-    //        return retval;
-    //    return -retval;
-  };
+  },
+  relu: {
+    func: (num) => {
+      if (num > 0) {
+        return num;
+      }
+      return 0;
+    },
+    derivative: (num) => {
+      if (num > 0) {
+        return 1;
+      }
+      return 0;
+    }
+  }
 }
 
+// Cost functions
+const COST = {
+  quadratic: {
+    delta: (a, y, z, activationType) => {
+      const rateChangeOutput = applyFunctionOverMatrix(z, ACTIVATION_TYPE[activationType].derivative);
+      const rateChangeCost = subtractMatrix(a, y);
+      return multiplyMatrix(rateChangeCost, rateChangeOutput);
+    }
+  },
+  // Notice how this does not need z or activationType, it's derivative is the primary
+  // value of cross entropy function
+  crossEntropy: {
+    delta: (a, y) => subtractMatrix(a, y)
+  }
+};
 
-function calculateSigmoid(num) {
-  return 1 / (1 + Math.pow(Math.E, -num));
-}
 
-function calculateSigmoidPrime(num) {
-  const sigmoid = calculateSigmoid(num)
-  return sigmoid * (1 - sigmoid);
-}
-
-function calculateCostDerivative(output, y) {
-  return subtractMatrix(output, y);
-}
-
-export function backProp(x, y, biases, weights) {
+export function backProp(x, y, biases, weights, costFunction, activationType) {
 
   const nablaB = zeroMatrix(biases);
   const nablaW = zeroMatrix(weights);
@@ -68,23 +77,22 @@ export function backProp(x, y, biases, weights) {
     const cross = crossProduct(weights[i], activation);
     const z = addMatrix(cross, biases[i]);
     zs.push(z);
-    activation = applyFunctionOverMatrix(z, calculateSigmoid);
+    activation = applyFunctionOverMatrix(z, ACTIVATION_TYPE[activationType].func);
     activations.push(activation);
   }
 
-  const error = calculateCostDerivative(activation, y);
-  const derivativeZ = applyFunctionOverMatrix(zs[zs.length - 1], calculateSigmoidPrime);
-
-  // This is the error in the last layer
-  let delta = multiplyMatrix(error, derivativeZ);
+  // Get Delta in final layer
+  let delta = COST[costFunction].delta(activation, y, zs[zs.length - 1], activationType);
 
   nablaB[nablaB.length - 1] = delta;
-  const tranposeSecondLastLayer = transposeMatrix(activations[activations.length - 2]);
-  nablaW[nablaW.length - 1] = crossProduct(delta, tranposeSecondLastLayer);
+  nablaW[nablaW.length - 1] = crossProduct(
+    delta,
+    transposeMatrix(activations[activations.length - 2])
+  );
 
   for (let i = biases.length - 1; i > 0; i--) {
     const z = zs[i - 1];
-    const layerDerivative = applyFunctionOverMatrix(z, calculateSigmoidPrime);
+    const layerDerivative = applyFunctionOverMatrix(z, ACTIVATION_TYPE[activationType].derivative);
     delta = multiplyMatrix(
       layerDerivative,
       crossProduct(transposeMatrix(weights[i]), delta)
@@ -95,7 +103,7 @@ export function backProp(x, y, biases, weights) {
   return { nablaB, nablaW };
 }
 
-export function updateMiniBatch(batch, eta, initBiases, initWeights) {
+export function updateMiniBatch(batch, eta, initBiases, initWeights, costFunction, activationType) {
   // Initialize to zero values
   const nablaB = zeroMatrix(initBiases);
   const nablaW = zeroMatrix(initWeights);
@@ -104,7 +112,7 @@ export function updateMiniBatch(batch, eta, initBiases, initWeights) {
 
   // Using a single mini-batch, adjust the gradient for each backprop
   for (let i = 0; i < batch.length; i++) {
-    const deltas = backProp(batch[i].x, batch[i].y, biases, weights);
+    const deltas = backProp(batch[i].x, batch[i].y, biases, weights, costFunction, activationType);
     for (let j = 0; j < nablaB.length; j++) {
       nablaB[j] = addMatrix(nablaB[j], deltas.nablaB[j]);
       nablaW[j] = addMatrix(nablaW[j], deltas.nablaW[j]);
@@ -125,23 +133,23 @@ export function updateMiniBatch(batch, eta, initBiases, initWeights) {
   return { biases, weights };
 }
 
-export function feedForward(a, biases, weights) {
+export function feedForward(a, biases, weights, activationType) {
   for (let i = 0; i < biases.length; i++) {
     a = applyFunctionOverMatrix(addMatrix(
       crossProduct(weights[i], a),
       biases[i]
-    ), calculateSigmoid);
+    ), ACTIVATION_TYPE[activationType].func);
   }
   return a;
 }
 
-export function evaluateTestData(testData, biases, weights) {
+export function evaluateTestData(testData, biases, weights, activationType) {
 
   const testMap = {}
   let count = 0;
 
   for (let i = 0; i < testData.length; i++) {
-    const xResult = _.flattenDeep(feedForward(testData[i].x, biases, weights));
+    const xResult = _.flattenDeep(feedForward(testData[i].x, biases, weights, activationType));
     const expectedIndex = testData[i].yIndex;
     let max = 0;
     let actualIndex = 0;
@@ -190,14 +198,14 @@ export function splitIntoMiniBatches(trainingData, miniBatchSize) {
 }
 
 
-
-export function printSnapshot(biases, weights, epoch, onStateUpdate, testData) {
+export function printSnapshot(biases, weights, epoch, onStateUpdate, testData, activationType) {
+  /* Ensure references are not being held onto here */
   const snapshot = {
-    biases: biases,
-    weights: weights
+    biases: _.cloneDeep(biases),
+    weights: _.cloneDeep(weights)
   }
   if (testData) {
-    const {testMap, count} = evaluateTestData(testData, biases, weights);
+    const {testMap, count} = evaluateTestData(testData, biases, weights, activationType);
     snapshot.testResults = testMap;
     if (epoch > 0) {
       console.log(`Epoch ${epoch} complete: ${count} out of ${testData.length}`)
@@ -214,10 +222,19 @@ export function printSnapshot(biases, weights, epoch, onStateUpdate, testData) {
 }
 
 export function runEpochs(options, initialBiases, initialWeights) {
-  const { trainingData, epochs, miniBatchSize, eta, testData, onStateUpdate } = options;
+  const {
+    trainingData,
+    epochs,
+    miniBatchSize,
+    eta,
+    testData,
+    onStateUpdate,
+    costFunction,
+    activationType
+  } = options;
 
   console.log(`Training data points: ${trainingData.length}`)
-  printSnapshot(initialBiases, initialWeights, 0, onStateUpdate, testData)
+  printSnapshot(initialBiases, initialWeights, 0, onStateUpdate, testData, activationType)
 
   for (let i = 0; i < epochs; i++) {
     const miniBatches = splitIntoMiniBatches(_.shuffle(trainingData), miniBatchSize);
@@ -225,12 +242,12 @@ export function runEpochs(options, initialBiases, initialWeights) {
     let curWeights = initialWeights;
     let curBiases = initialBiases;
     miniBatches.forEach((batch, index) => {
-      const { weights, biases } = updateMiniBatch(batch, eta, curBiases, curWeights);
+      const { weights, biases } = updateMiniBatch(batch, eta, curBiases, curWeights, costFunction, activationType);
       curWeights = weights;
       curBiases = biases;
     });
 
-    printSnapshot(curBiases, curWeights, i + 1, onStateUpdate, testData)
+    printSnapshot(curBiases, curWeights, i + 1, onStateUpdate, testData, activationType)
   }
 }
 
@@ -256,16 +273,22 @@ export function generateWeights(sizes) {
     for (let j = 0; j < sizes[i + 1]; j++) {
       weights[i][j] = [];
       for (let k = 0; k < sizes[i]; k++) {
-        weights[i][j][k] = guassianGenerator();
+        weights[i][j][k] = guassianGenerator() / Math.sqrt(sizes[i]);
       }
     }
   }
   return weights;
 }
 
+// Entry point, light option validation.
 export function runNeuralNetwork(options) {
   console.log('Starting...');
-  const biases = generateBiases(options.sizes);
-  const weights = generateWeights(options.sizes);
-  runEpochs(options, biases, weights);
+  if (options.costFunction === 'quadratic' || options.costFunction === 'crossEntropy'
+    && options.activationType === 'sigmoid' || options.activationType === 'tanh') {
+    const biases = generateBiases(options.sizes);
+    const weights = generateWeights(options.sizes);
+    runEpochs(options, biases, weights);
+  } else {
+    throw new Error('Cost function is required');
+  }
 }
