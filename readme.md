@@ -11,7 +11,7 @@ want to wait even 30 seconds per run let alone up to an hour.
 
 Running a network with 30 hidden nodes took this program almost 55 minutes,
 while Michael Nielsen's algorithm took less then a minute using Python and Numpy.
-Numpy handles matrices in an high performant way using a C (or C++) implementation.
+Numpy handles matrices in a high performant way using a C (or C++) implementation.
 This JS library includes some element-wise matrix functions which may be the bottleneck
 in the algorithm, although more testing would be necessary.
 
